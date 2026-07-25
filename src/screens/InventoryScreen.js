@@ -8,9 +8,10 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, increment } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import BottomNav from '../components/BottomNav';
+import { notify } from '../utils/alerts';
 
 export default function InventoryScreen({ navigation }) {
   const [productos, setProductos] = useState([]);
@@ -35,6 +36,18 @@ export default function InventoryScreen({ navigation }) {
     return cantidad <= min
       ? { label: 'Stock bajo', color: '#e05353' }
       : { label: 'En Stock', color: '#2fa84f' };
+  };
+
+  const ajustarStock = async (item, delta) => {
+    if ((item.cantidad || 0) + delta < 0) return;
+    try {
+      const uid = auth.currentUser?.uid;
+      await updateDoc(doc(db, 'usuarios', uid, 'productos', item.id), {
+        cantidad: increment(delta),
+      });
+    } catch (e) {
+      notify('Error', 'No se pudo actualizar el stock, intenta de nuevo');
+    }
   };
 
   return (
@@ -74,8 +87,22 @@ export default function InventoryScreen({ navigation }) {
           const estado = estadoStock(item.cantidad ?? 0);
           return (
             <View style={styles.row}>
-              <Text style={[styles.cell, { flex: 2, fontWeight: '600' }]}>{item.nombre}</Text>
-              <Text style={[styles.cell, { flex: 1 }]}>{item.cantidad} Und.</Text>
+              <TouchableOpacity
+                style={{ flex: 2 }}
+                onPress={() => navigation.navigate('AddProduct', { product: item })}
+              >
+                <Text style={[styles.cell, { fontWeight: '600' }]}>{item.nombre}</Text>
+                <Text style={styles.editHint}>Toca para editar</Text>
+              </TouchableOpacity>
+              <View style={styles.stockStepper}>
+                <TouchableOpacity onPress={() => ajustarStock(item, -1)} hitSlop={8}>
+                  <Ionicons name="remove-circle-outline" size={19} color="#999" />
+                </TouchableOpacity>
+                <Text style={styles.stockValue}>{item.cantidad}</Text>
+                <TouchableOpacity onPress={() => ajustarStock(item, 1)} hitSlop={8}>
+                  <Ionicons name="add-circle-outline" size={19} color="#111" />
+                </TouchableOpacity>
+              </View>
               <View style={{ flex: 1 }}>
                 <View style={[styles.badge, { backgroundColor: estado.color }]}>
                   <Text style={styles.badgeText}>{estado.label}</Text>
@@ -131,6 +158,15 @@ const styles = StyleSheet.create({
     borderTopColor: '#f0f0f0',
   },
   cell: { fontSize: 13 },
+  editHint: { fontSize: 10, color: '#bbb', marginTop: 1 },
+  stockStepper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  stockValue: { fontSize: 13, minWidth: 22, textAlign: 'center' },
   badge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,

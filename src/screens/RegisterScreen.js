@@ -5,12 +5,12 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../firebaseConfig';
+import { notify } from '../utils/alerts';
 
 export default function RegisterScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -19,11 +19,11 @@ export default function RegisterScreen({ navigation }) {
 
   const handleRegister = async () => {
     if (!email || !password) {
-      Alert.alert('Faltan datos', 'Ingresa tu correo y contraseña');
+      notify('Faltan datos', 'Ingresa tu correo y contraseña');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Contraseña muy corta', 'Debe tener al menos 6 caracteres');
+      notify('Contraseña muy corta', 'Debe tener al menos 6 caracteres');
       return;
     }
     setLoading(true);
@@ -31,7 +31,7 @@ export default function RegisterScreen({ navigation }) {
       await createUserWithEmailAndPassword(auth, email.trim(), password);
       // Al crearse la cuenta, App.js detecta la sesión y navega solo
     } catch (error) {
-      Alert.alert('Error al registrar', traducirError(error.code));
+      notify('Error al registrar', traducirError(error.code));
     } finally {
       setLoading(false);
     }

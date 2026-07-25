@@ -5,12 +5,12 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../firebaseConfig';
+import { notify } from '../utils/alerts';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -19,7 +19,7 @@ export default function LoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Faltan datos', 'Ingresa tu correo y contraseña');
+      notify('Faltan datos', 'Ingresa tu correo y contraseña');
       return;
     }
     setLoading(true);
@@ -27,7 +27,7 @@ export default function LoginScreen({ navigation }) {
       await signInWithEmailAndPassword(auth, email.trim(), password);
       // La navegación cambia sola gracias a onAuthStateChanged en App.js
     } catch (error) {
-      Alert.alert('Error al iniciar sesión', traducirError(error.code));
+      notify('Error al iniciar sesión', traducirError(error.code));
     } finally {
       setLoading(false);
     }

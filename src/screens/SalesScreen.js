@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -22,12 +21,14 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import BottomNav from '../components/BottomNav';
+import { notify } from '../utils/alerts';
 
 export default function SalesScreen({ navigation }) {
   const [productos, setProductos] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [carrito, setCarrito] = useState({}); // { productoId: cantidad }
   const [cliente, setCliente] = useState('');
+  const [metodoPago, setMetodoPago] = useState('efectivo'); // 'efectivo' | 'fiado'
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
@@ -60,7 +61,11 @@ export default function SalesScreen({ navigation }) {
 
   const handleGuardarVenta = async () => {
     if (itemsCarrito.length === 0) {
-      Alert.alert('Carrito vacío', 'Selecciona al menos un producto');
+      notify('Carrito vacío', 'Selecciona al menos un producto');
+      return;
+    }
+    if (metodoPago === 'fiado' && !cliente.trim()) {
+      notify('Falta el cliente', 'Para una venta fiada necesitas el nombre del cliente');
       return;
     }
     const uid = auth.currentUser?.uid;
@@ -75,6 +80,9 @@ export default function SalesScreen({ navigation }) {
         })),
         total,
         cliente: cliente || 'Sin nombre',
+        metodoPago,
+        deuda: metodoPago === 'fiado',
+        pagado: metodoPago === 'efectivo',
         fecha: serverTimestamp(),
       });
 
@@ -87,12 +95,12 @@ export default function SalesScreen({ navigation }) {
         )
       );
 
-      Alert.alert('Venta guardada', `Total cobrado: S/ ${total.toFixed(2)}`);
       setCarrito({});
       setCliente('');
+      setMetodoPago('efectivo');
       navigation.navigate('SalesHistory');
     } catch (e) {
-      Alert.alert('Error', 'No se pudo guardar la venta');
+      notify('Error', 'No se pudo guardar la venta');
     } finally {
       setGuardando(false);
     }
@@ -153,10 +161,27 @@ export default function SalesScreen({ navigation }) {
 
       <TextInput
         style={styles.inputCliente}
-        placeholder="Nombre del cliente (opcional)"
+        placeholder={metodoPago === 'fiado' ? 'Nombre del cliente (obligatorio)' : 'Nombre del cliente (opcional)'}
         value={cliente}
         onChangeText={setCliente}
       />
+
+      <View style={styles.pagoRow}>
+        <TouchableOpacity
+          style={[styles.pagoOption, metodoPago === 'efectivo' && styles.pagoOptionActive]}
+          onPress={() => setMetodoPago('efectivo')}
+        >
+          <Ionicons name="cash-outline" size={16} color={metodoPago === 'efectivo' ? '#fff' : '#111'} />
+          <Text style={[styles.pagoText, metodoPago === 'efectivo' && styles.pagoTextActive]}>Efectivo</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.pagoOption, metodoPago === 'fiado' && styles.pagoOptionActiveWarn]}
+          onPress={() => setMetodoPago('fiado')}
+        >
+          <Ionicons name="time-outline" size={16} color={metodoPago === 'fiado' ? '#fff' : '#111'} />
+          <Text style={[styles.pagoText, metodoPago === 'fiado' && styles.pagoTextActive]}>Fiado</Text>
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity style={styles.button} onPress={handleGuardarVenta} disabled={guardando}>
         <Text style={styles.buttonText}>{guardando ? 'Guardando...' : 'Guardar Venta'}</Text>
@@ -217,6 +242,22 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 10,
   },
+  pagoRow: { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginBottom: 10 },
+  pagoOption: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  pagoOptionActive: { backgroundColor: '#2fa84f', borderColor: '#2fa84f' },
+  pagoOptionActiveWarn: { backgroundColor: '#e0a83e', borderColor: '#e0a83e' },
+  pagoText: { fontWeight: '600', fontSize: 13, color: '#111' },
+  pagoTextActive: { color: '#fff' },
   button: {
     backgroundColor: '#111',
     marginHorizontal: 16,

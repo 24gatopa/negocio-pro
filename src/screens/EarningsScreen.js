@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import BottomNav from '../components/BottomNav';
+import { confirmAsync, notify } from '../utils/alerts';
 
 export default function EarningsScreen() {
   const [ventas, setVentas] = useState([]);
@@ -21,8 +22,24 @@ export default function EarningsScreen() {
   const ventasTotales = ventas.reduce((sum, v) => sum + (v.total || 0), 0);
   const ventasRealizadas = ventas.length;
 
-  // "Clientes que deben" -> ventas marcadas como pendientes de pago (deuda: true)
-  const clientesQueDeben = ventas.filter((v) => v.deuda);
+  // "Clientes que deben" -> ventas fiadas que todavía no se han pagado
+  const clientesQueDeben = ventas.filter((v) => v.deuda && !v.pagado);
+  const totalPorCobrar = clientesQueDeben.reduce((sum, v) => sum + (v.total || 0), 0);
+
+  const marcarComoPagado = async (venta) => {
+    const ok = await confirmAsync(
+      'Marcar como pagado',
+      `¿${venta.cliente} ya pagó S/ ${venta.total?.toFixed(2)}?`,
+      'Sí, ya pagó'
+    );
+    if (!ok) return;
+    try {
+      const uid = auth.currentUser?.uid;
+      await updateDoc(doc(db, 'usuarios', uid, 'ventas', venta.id), { pagado: true });
+    } catch (e) {
+      notify('Error', 'No se pudo actualizar, intenta de nuevo');
+    }
+  };
 
   const formatearFecha = (fecha) => (fecha?.toDate ? fecha.toDate().toLocaleDateString() : '');
 
@@ -46,7 +63,9 @@ export default function EarningsScreen() {
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Clientes que deben:</Text>
+      <Text style={styles.sectionTitle}>
+        Clientes que deben: {clientesQueDeben.length > 0 ? `(S/ ${totalPorCobrar.toFixed(2)} por cobrar)` : ''}
+      </Text>
 
       <FlatList
         data={clientesQueDeben}
@@ -57,9 +76,15 @@ export default function EarningsScreen() {
         }
         renderItem={({ item }) => (
           <View style={styles.row}>
-            <Text style={{ flex: 2 }}>{item.cliente}</Text>
+            <View style={{ flex: 2 }}>
+              <Text style={{ fontWeight: '600' }}>{item.cliente}</Text>
+              <Text style={styles.rowDate}>{formatearFecha(item.fecha)}</Text>
+            </View>
             <Text style={{ flex: 1 }}>S/ {item.total?.toFixed(2)}</Text>
-            <Text style={{ flex: 1, fontSize: 11, color: '#999' }}>{formatearFecha(item.fecha)}</Text>
+            <TouchableOpacity style={styles.payButton} onPress={() => marcarComoPagado(item)}>
+              <Ionicons name="checkmark" size={13} color="#fff" />
+              <Text style={styles.payButtonText}>Pagado</Text>
+            </TouchableOpacity>
           </View>
         )}
       />
@@ -100,4 +125,15 @@ const styles = StyleSheet.create({
     borderTopColor: '#f0f0f0',
     paddingVertical: 10,
   },
+  rowDate: { fontSize: 11, color: '#999', marginTop: 2 },
+  payButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#2fa84f',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  payButtonText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 });

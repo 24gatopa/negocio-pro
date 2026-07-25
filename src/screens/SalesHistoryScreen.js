@@ -73,8 +73,17 @@ export default function SalesHistoryScreen({ navigation }) {
               <Text style={styles.cardClient}>{item.cliente}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>EFECTIVO</Text>
+              <View
+                style={[
+                  styles.badge,
+                  item.deuda && !item.pagado
+                    ? { backgroundColor: '#e0a83e' }
+                    : { backgroundColor: '#2fa84f' },
+                ]}
+              >
+                <Text style={styles.badgeText}>
+                  {item.deuda ? (item.pagado ? 'PAGADO' : 'FIADO') : 'EFECTIVO'}
+                </Text>
               </View>
               <Text style={styles.cardTotal}>S/ {item.total?.toFixed(2)}</Text>
             </View>

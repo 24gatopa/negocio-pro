@@ -5,42 +5,63 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import BottomNav from '../components/BottomNav';
+import { notify, confirmAsync } from '../utils/alerts';
 
-export default function AddProductScreen({ navigation }) {
-  const [nombre, setNombre] = useState('');
-  const [precio, setPrecio] = useState('');
-  const [cantidad, setCantidad] = useState('');
+export default function AddProductScreen({ navigation, route }) {
+  const producto = route.params?.product;
+  const editando = !!producto;
+
+  const [nombre, setNombre] = useState(producto?.nombre || '');
+  const [precio, setPrecio] = useState(producto?.precio?.toString() || '');
+  const [cantidad, setCantidad] = useState(producto?.cantidad?.toString() || '');
   const [guardando, setGuardando] = useState(false);
 
   const handleGuardar = async () => {
     if (!nombre || !precio || !cantidad) {
-      Alert.alert('Faltan datos', 'Completa nombre, precio y cantidad');
+      notify('Faltan datos', 'Completa nombre, precio y cantidad');
       return;
     }
     const uid = auth.currentUser?.uid;
     setGuardando(true);
     try {
-      await addDoc(collection(db, 'usuarios', uid, 'productos'), {
+      const data = {
         nombre,
         precio: parseFloat(precio),
         cantidad: parseInt(cantidad, 10),
-        estado: 'Activo',
-        creadoEn: serverTimestamp(),
-      });
-      Alert.alert('Listo', 'Producto guardado');
+      };
+      if (editando) {
+        await updateDoc(doc(db, 'usuarios', uid, 'productos', producto.id), data);
+      } else {
+        await addDoc(collection(db, 'usuarios', uid, 'productos'), {
+          ...data,
+          estado: 'Activo',
+          creadoEn: serverTimestamp(),
+        });
+      }
       navigation.navigate('Inventory');
     } catch (e) {
-      Alert.alert('Error', 'No se pudo guardar el producto');
+      notify('Error', 'No se pudo guardar el producto');
     } finally {
       setGuardando(false);
     }
+  };
+
+  const handleEliminar = async () => {
+    const ok = await confirmAsync(
+      'Eliminar producto',
+      `¿Seguro que quieres eliminar "${nombre}"?`,
+      'Eliminar'
+    );
+    if (!ok) return;
+    const uid = auth.currentUser?.uid;
+    await deleteDoc(doc(db, 'usuarios', uid, 'productos', producto.id));
+    navigation.navigate('Inventory');
   };
 
   return (
@@ -49,7 +70,7 @@ export default function AddProductScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={22} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Producto nuevo</Text>
+        <Text style={styles.headerTitle}>{editando ? 'Editar producto' : 'Producto nuevo'}</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -76,8 +97,17 @@ export default function AddProductScreen({ navigation }) {
         />
 
         <TouchableOpacity style={styles.button} onPress={handleGuardar} disabled={guardando}>
-          <Text style={styles.buttonText}>{guardando ? 'Guardando...' : 'Guardar Producto'}</Text>
+          <Text style={styles.buttonText}>
+            {guardando ? 'Guardando...' : editando ? 'Guardar cambios' : 'Guardar Producto'}
+          </Text>
         </TouchableOpacity>
+
+        {editando && (
+          <TouchableOpacity style={styles.deleteButton} onPress={handleEliminar}>
+            <Ionicons name="trash-outline" size={16} color="#c0392b" />
+            <Text style={styles.deleteText}>Eliminar producto</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       <BottomNav current="AddProduct" />
@@ -110,4 +140,13 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   buttonText: { color: '#fff', fontWeight: 'bold' },
+  deleteButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+    padding: 10,
+  },
+  deleteText: { color: '#c0392b', fontWeight: '600', fontSize: 13 },
 });
